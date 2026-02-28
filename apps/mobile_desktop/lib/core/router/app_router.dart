@@ -14,6 +14,8 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/expenses/presentation/pages/add_expense_page.dart';
 import '../../features/expenses/presentation/pages/expense_detail_page.dart';
 import '../../features/expenses/presentation/pages/expenses_page.dart';
+import '../../features/budgets/presentation/pages/add_budget_page.dart';
+import '../../features/budgets/presentation/pages/budgets_page.dart';
 import '../../features/recurring/presentation/pages/add_recurring_page.dart';
 import '../../features/recurring/presentation/pages/recurring_transactions_page.dart';
 import '../../features/reports/presentation/pages/reports_page.dart';
@@ -102,6 +104,17 @@ abstract class AppRouter {
             ],
           ),
 
+          // Budgets Branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.budgets,
+                name: 'budgets',
+                builder: (context, state) => const BudgetsPage(),
+              ),
+            ],
+          ),
+
           // Recurring Transactions Branch
           StatefulShellBranch(
             routes: [
@@ -136,6 +149,14 @@ abstract class AppRouter {
             ],
           ),
         ],
+      ),
+
+      // ─── Budget Modal Routes ──────────────────────────────────────────────
+      GoRoute(
+        path: RouteNames.addBudget,
+        name: 'addBudget',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AddBudgetPage(),
       ),
 
       // ─── Recurring Modal Routes ───────────────────────────────────────────
@@ -177,12 +198,11 @@ abstract class AppRouter {
       orElse: () => false,
     );
 
+    if (isLoading) return null;
+
     final isAuthRoute = state.matchedLocation == RouteNames.login ||
         state.matchedLocation == RouteNames.register ||
         state.matchedLocation == RouteNames.forgotPassword;
-
-    // Still loading — don't redirect
-    if (isLoading) return null;
 
     // Not authenticated and not on auth route — redirect to login
     if (!isAuthenticated && !isAuthRoute) return RouteNames.login;
