@@ -14,6 +14,9 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/expenses/presentation/pages/add_expense_page.dart';
 import '../../features/expenses/presentation/pages/expense_detail_page.dart';
 import '../../features/expenses/presentation/pages/expenses_page.dart';
+import '../../features/recurring/presentation/pages/add_recurring_page.dart';
+import '../../features/recurring/presentation/pages/recurring_transactions_page.dart';
+import '../../features/reports/presentation/pages/reports_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import 'app_scaffold.dart';
 import 'route_names.dart';
@@ -99,6 +102,29 @@ abstract class AppRouter {
             ],
           ),
 
+          // Recurring Transactions Branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.recurring,
+                name: 'recurring',
+                builder: (context, state) =>
+                    const RecurringTransactionsPage(),
+              ),
+            ],
+          ),
+
+          // Reports Branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.reports,
+                name: 'reports',
+                builder: (context, state) => const ReportsPage(),
+              ),
+            ],
+          ),
+
           // Settings Branch
           StatefulShellBranch(
             routes: [
@@ -110,6 +136,14 @@ abstract class AppRouter {
             ],
           ),
         ],
+      ),
+
+      // ─── Recurring Modal Routes ───────────────────────────────────────────
+      GoRoute(
+        path: RouteNames.addRecurring,
+        name: 'addRecurring',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AddRecurringPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
