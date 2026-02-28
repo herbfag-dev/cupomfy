@@ -17,4 +17,12 @@ abstract class RouteNames {
   static const budgets = '/budgets';
   static const addBudget = '/budgets/add';
   static const budgetDetail = '/budgets/:id';
+
+  // ── Recurring Transactions ────────────────────────────────────────────────
+  static const recurring = '/recurring';
+  static const addRecurring = '/recurring/add';
+
+  // ── Expense Reports ───────────────────────────────────────────────────────
+  static const reports = '/reports';
+  static const reportDetail = '/reports/detail';
 }
