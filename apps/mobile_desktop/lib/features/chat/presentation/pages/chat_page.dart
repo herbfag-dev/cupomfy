@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/di/injection.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../bloc/chat_bloc.dart';
+import '../bloc/chat_event.dart';
+import '../bloc/chat_state.dart';
 import '../widgets/message_bubble.dart';
 
 class ChatPage extends StatefulWidget {
@@ -33,7 +35,7 @@ class _ChatPageState extends State<ChatPage> {
 
     return BlocProvider(
       create: (_) => getIt<ChatBloc>()
-        ..add(ChatEvent.loadHistory(sessionId)),
+        ..add(ChatEvent.loadHistory(sessionId: sessionId)),
       child: _ChatView(userId: userId, sessionId: sessionId),
     );
   }
@@ -103,6 +105,9 @@ class _ChatViewState extends State<_ChatView> {
             initialValue: _selectedProvider,
             onSelected: (provider) {
               setState(() => _selectedProvider = provider);
+              context.read<ChatBloc>().add(
+                    ChatEvent.providerChanged(provider: provider),
+                  );
             },
             itemBuilder: (_) => [
               const PopupMenuItem(
@@ -156,9 +161,9 @@ class _ChatViewState extends State<_ChatView> {
               showDialog<void>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Clear History'),
+                  title: const Text('Clear Chat'),
                   content: const Text(
-                    'Are you sure you want to clear the chat history?',
+                    'Are you sure you want to clear the chat?',
                   ),
                   actions: [
                     TextButton(
@@ -169,7 +174,7 @@ class _ChatViewState extends State<_ChatView> {
                       onPressed: () {
                         Navigator.of(ctx).pop();
                         context.read<ChatBloc>().add(
-                              ChatEvent.clearHistory(widget.sessionId),
+                              const ChatEvent.clearChat(),
                             );
                       },
                       style: FilledButton.styleFrom(
@@ -188,14 +193,26 @@ class _ChatViewState extends State<_ChatView> {
         children: [
           // Messages list
           Expanded(
-            child: BlocBuilder<ChatBloc, ChatState>(
+            child: BlocConsumer<ChatBloc, ChatState>(
+              listener: (context, state) {
+                state.whenOrNull(
+                  error: (message) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(message),
+                        backgroundColor: theme.colorScheme.error,
+                      ),
+                    );
+                  },
+                );
+              },
               builder: (context, state) {
                 return state.when(
                   initial: () => _buildWelcomeState(context),
                   loading: () => const Center(
                     child: CircularProgressIndicator(),
                   ),
-                  loaded: (messages) {
+                  loaded: (messages, provider, isSending) {
                     if (messages.isEmpty) {
                       return _buildWelcomeState(context);
                     }
@@ -217,19 +234,6 @@ class _ChatViewState extends State<_ChatView> {
                       },
                     );
                   },
-                  sending: () {
-                    return Column(
-                      children: [
-                        Expanded(
-                          child: BlocBuilder<ChatBloc, ChatState>(
-                            buildWhen: (prev, curr) => curr is _Loaded,
-                            builder: (context, _) => const SizedBox.shrink(),
-                          ),
-                        ),
-                        _buildTypingIndicator(context),
-                      ],
-                    );
-                  },
                   error: (message) => Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -245,7 +249,9 @@ class _ChatViewState extends State<_ChatView> {
                         FilledButton(
                           onPressed: () {
                             context.read<ChatBloc>().add(
-                                  ChatEvent.loadHistory(widget.sessionId),
+                                  ChatEvent.loadHistory(
+                                    sessionId: widget.sessionId,
+                                  ),
                                 );
                           },
                           child: const Text('Retry'),
@@ -258,8 +264,81 @@ class _ChatViewState extends State<_ChatView> {
             ),
           ),
 
+          // Typing indicator
+          BlocBuilder<ChatBloc, ChatState>(
+            builder: (context, state) {
+              final isSending = state.maybeWhen(
+                loaded: (_, __, isSending) => isSending,
+                orElse: () => false,
+              );
+              if (isSending) {
+                return _buildTypingIndicator(context);
+              }
+              return const SizedBox.shrink();
+            },
+          ),
+
           // Input area
-          _buildInputArea(context),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              border: Border(
+                top: BorderSide(
+                  color: theme.colorScheme.outlineVariant,
+                ),
+              ),
+            ),
+            child: SafeArea(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: 'Ask about your finances...',
+                        filled: true,
+                        fillColor: theme.colorScheme.surfaceContainerHighest,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _sendMessage(),
+                      enabled: true,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  BlocBuilder<ChatBloc, ChatState>(
+                    builder: (context, state) {
+                      final isSending = state.maybeWhen(
+                        loaded: (_, __, isSending) => isSending,
+                        orElse: () => false,
+                      );
+                      return isSending
+                          ? const SizedBox(
+                              width: 48,
+                              height: 48,
+                              child: Padding(
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : IconButton.filled(
+                              onPressed: _sendMessage,
+                              icon: const Icon(Icons.send_rounded),
+                            );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -267,19 +346,20 @@ class _ChatViewState extends State<_ChatView> {
 
   Widget _buildWelcomeState(BuildContext context) {
     final theme = Theme.of(context);
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.auto_awesome,
+            Icons.chat_bubble_outline,
             size: 64,
             color: theme.colorScheme.primary.withOpacity(0.5),
           ),
           const SizedBox(height: 16),
           Text(
             'AI Financial Assistant',
-            style: theme.textTheme.titleLarge?.copyWith(
+            style: theme.textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -287,7 +367,7 @@ class _ChatViewState extends State<_ChatView> {
           Text(
             'Ask me anything about your finances',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 24),
@@ -326,39 +406,27 @@ class _ChatViewState extends State<_ChatView> {
 
   Widget _buildTypingIndicator(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
+
+    return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      alignment: Alignment.centerLeft,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-            child: Icon(
-              Icons.auto_awesome,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-                bottomLeft: Radius.circular(4),
-              ),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _TypingDot(delay: 0),
+                _buildDot(0),
                 const SizedBox(width: 4),
-                _TypingDot(delay: 200),
+                _buildDot(1),
                 const SizedBox(width: 4),
-                _TypingDot(delay: 400),
+                _buildDot(2),
               ],
             ),
           ),
@@ -367,80 +435,24 @@ class _ChatViewState extends State<_ChatView> {
     );
   }
 
-  Widget _buildInputArea(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        MediaQuery.of(context).padding.bottom + 8,
-      ),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outline.withOpacity(0.1),
+  Widget _buildDot(int index) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: 0.3 + (value * 0.7),
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
           ),
-        ),
-      ),
-      child: BlocBuilder<ChatBloc, ChatState>(
-        builder: (context, state) {
-          final isSending = state.maybeWhen(
-            sending: () => true,
-            orElse: () => false,
-          );
-
-          return Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(
-                    hintText: 'Ask about your finances...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHighest,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                  ),
-                  maxLines: 4,
-                  minLines: 1,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => isSending ? null : _sendMessage(),
-                  enabled: !isSending,
-                ),
-              ),
-              const SizedBox(width: 8),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                child: isSending
-                    ? const SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton.filled(
-                        onPressed: _sendMessage,
-                        icon: const Icon(Icons.send_rounded),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(48, 48),
-                        ),
-                      ),
-              ),
-            ],
-          );
-        },
-      ),
+        );
+      },
     );
   }
 }
@@ -456,67 +468,15 @@ class _SuggestionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return ActionChip(
       label: Text(label),
       onPressed: onTap,
-    );
-  }
-}
-
-class _TypingDot extends StatefulWidget {
-  const _TypingDot({required this.delay});
-
-  final int delay;
-
-  @override
-  State<_TypingDot> createState() => _TypingDotState();
-}
-
-class _TypingDotState extends State<_TypingDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    Future.delayed(Duration(milliseconds: widget.delay), () {
-      if (mounted) {
-        _controller.repeat(reverse: true);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, _) {
-        return Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: theme.colorScheme.onSurfaceVariant
-                .withOpacity(0.3 + (_animation.value * 0.7)),
-          ),
-        );
-      },
+      backgroundColor: theme.colorScheme.primaryContainer,
+      labelStyle: TextStyle(
+        color: theme.colorScheme.onPrimaryContainer,
+      ),
     );
   }
 }
