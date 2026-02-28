@@ -21,4 +21,8 @@ abstract class RouteNames {
   // ── Recurring Transactions ────────────────────────────────────────────────
   static const recurring = '/recurring';
   static const addRecurring = '/recurring/add';
+
+  // ── Expense Reports ───────────────────────────────────────────────────────
+  static const reports = '/reports';
+  static const reportDetail = '/reports/detail';
 }
