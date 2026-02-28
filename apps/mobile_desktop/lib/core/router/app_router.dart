@@ -14,6 +14,8 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/expenses/presentation/pages/add_expense_page.dart';
 import '../../features/expenses/presentation/pages/expense_detail_page.dart';
 import '../../features/expenses/presentation/pages/expenses_page.dart';
+import '../../features/budgets/presentation/pages/add_budget_page.dart';
+import '../../features/budgets/presentation/pages/budgets_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import 'app_scaffold.dart';
 import 'route_names.dart';
@@ -99,6 +101,17 @@ abstract class AppRouter {
             ],
           ),
 
+          // Budgets Branch
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RouteNames.budgets,
+                name: 'budgets',
+                builder: (context, state) => const BudgetsPage(),
+              ),
+            ],
+          ),
+
           // Settings Branch
           StatefulShellBranch(
             routes: [
@@ -110,6 +123,14 @@ abstract class AppRouter {
             ],
           ),
         ],
+      ),
+
+      // ─── Budget Modal Routes ──────────────────────────────────────────────
+      GoRoute(
+        path: RouteNames.addBudget,
+        name: 'addBudget',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (context, state) => const AddBudgetPage(),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
